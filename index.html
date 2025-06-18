@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>帮刘雅欣提升分数</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://cdn.jsdelivr.net/npm/font-awesome@4.7.0/css/font-awesome.min.css" rel="stylesheet">
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            primary: '#3B82F6',
+            secondary: '#EF4444',
+            accent: '#10B981',
+            dark: '#0F172A',
+          },
+        },
+      }
+    }
+  </script>
+  <style>
+    body {
+      touch-action: none;
+      overscroll-behavior: none;
+    }
+  </style>
+</head>
+<body class="bg-dark m-0 p-0 overflow-hidden">
+  <div class="relative w-screen h-[100dvh]">
+    <canvas id="gameCanvas" class="w-full h-full bg-dark touch-none"></canvas>
+    <div id="gameStart" class="absolute inset-0 flex items-center justify-center bg-dark/90 text-white">
+      <button id="startButton" class="px-8 py-4 bg-primary rounded-full text-xl font-bold">开始游戏</button>
+    </div>
+    <div id="scoreDisplay" class="absolute top-4 left-4 text-white text-lg">分数: <span id="score">0</span></div>
+    <div id="livesDisplay" class="absolute top-4 right-4 text-white text-lg">生命值: <span id="lives">10</span></div>
+    <div id="gameOver" class="absolute inset-0 hidden flex-col items-center justify-center text-white bg-dark/90">
+      <h1 class="text-4xl mb-4">游戏结束</h1>
+      <p id="finalScore"></p>
+      <p id="finalMessage" class="text-xl"></p>
+      <button onclick="restartGame()" class="mt-6 px-6 py-3 bg-secondary rounded-full">再来一次</button>
+    </div>
+  </div>
+  <script>
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+
+    const startBtn = document.getElementById('startButton');
+    const gameStart = document.getElementById('gameStart');
+    const scoreEl = document.getElementById('score');
+    const livesEl = document.getElementById('lives');
+    const gameOver = document.getElementById('gameOver');
+    const finalScore = document.getElementById('finalScore');
+    const finalMessage = document.getElementById('finalMessage');
+
+    let score = 0;
+    let lives = 10;
+    let gameRunning = false;
+    let keys = {};
+    let enemies = [];
+    let bullets = [];
+    let animationId;
+
+    const playerImage = new Image();
+    playerImage.src = 'https://i.hd-r.icu/70cd5b60c67debaa86e51d8e1ca3e77e.png';
+
+    const player = {
+      x: canvas.width / 2 - 25,
+      y: canvas.height - 80,
+      w: 50,
+      h: 50,
+      speed: 5,
+      draw() {
+        if (playerImage.complete) {
+          ctx.drawImage(playerImage, this.x, this.y, this.w, this.h);
+        } else {
+          ctx.fillStyle = '#0af';
+          ctx.fillRect(this.x, this.y, this.w, this.h);
+        }
+      },
+      move() {
+        if (keys['ArrowLeft'] && this.x > 0) this.x -= this.speed;
+        if (keys['ArrowRight'] && this.x < canvas.width - this.w) this.x += this.speed;
+        if (keys['ArrowUp'] && this.y > 0) this.y -= this.speed;
+        if (keys['ArrowDown'] && this.y < canvas.height - this.h) this.y += this.speed;
+      }
+    };
+
+    function spawnEnemy() {
+      const enemyNames = ['5002', '5207', '5318', '5339'];
+      const name = enemyNames[Math.floor(Math.random() * enemyNames.length)];
+      const size = 40;
+      enemies.push({ x: Math.random() * (canvas.width - size), y: -size, w: size, h: size, speed: 2, name: name, passed: false });
+      if (gameRunning) setTimeout(spawnEnemy, 1000);
+    }
+
+    function shoot() {
+      bullets.push({ x: player.x + player.w / 2 - 2, y: player.y, w: 4, h: 15 });
+    }
+
+    function drawGame() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      player.move();
+      player.draw();
+
+      bullets.forEach(b => {
+        b.y -= 8;
+        ctx.fillStyle = '#fff';
+        ctx.fillRect(b.x, b.y, b.w, b.h);
+      });
+      bullets = bullets.filter(b => b.y > 0);
+
+      enemies.forEach(e => {
+        e.y += e.speed;
+        ctx.fillStyle = '#f00';
+        ctx.fillRect(e.x, e.y, e.w, e.h);
+        ctx.fillStyle = '#000';
+        ctx.font = '12px Arial';
+        ctx.textAlign = 'center';
+        ctx.fillText(e.name, e.x + e.w / 2, e.y + e.h / 2);
+      });
+
+      for (let i = bullets.length - 1; i >= 0; i--) {
+        const b = bullets[i];
+        for (let j = enemies.length - 1; j >= 0; j--) {
+          const e = enemies[j];
+          if (b.x < e.x + e.w && b.x + b.w > e.x && b.y < e.y + e.h && b.y + b.h > e.y) {
+            bullets.splice(i, 1);
+            enemies.splice(j, 1);
+            score += 10;
+            scoreEl.textContent = score;
+            break;
+          }
+        }
+      }
+
+      enemies = enemies.filter(e => {
+        if (e.y > canvas.height) {
+          if (!e.passed) {
+            e.passed = true;
+            lives--;
+            livesEl.textContent = lives;
+            if (lives <= 0) {
+              end();
+              return false;
+            }
+          }
+          return false;
+        }
+        return true;
+      });
+
+      if (gameRunning) animationId = requestAnimationFrame(drawGame);
+    }
+
+    function startGame() {
+      score = 0;
+      lives = 10;
+      enemies = [];
+      bullets = [];
+      scoreEl.textContent = score;
+      livesEl.textContent = lives;
+      gameStart.classList.add('hidden');
+      gameOver.classList.add('hidden');
+      gameRunning = true;
+      player.x = canvas.width / 2 - 25;
+      player.y = canvas.height - 80;
+      spawnEnemy();
+      drawGame();
+    }
+
+    function restartGame() {
+      cancelAnimationFrame(animationId);
+      startGame();
+    }
+
+    function end() {
+      gameRunning = false;
+      cancelAnimationFrame(animationId);
+      finalScore.textContent = `最终得分：${score}`;
+      if (score < 50) {
+        finalMessage.textContent = '刘雅欣没能及格😭';
+      } else if (score < 100) {
+        finalMessage.textContent = '刘雅欣及格啦🤣';
+      } else {
+        finalMessage.textContent = '刘雅欣起飞啦✈️';
+      }
+      gameOver.classList.remove('hidden');
+    }
+
+    window.addEventListener('keydown', e => {
+      keys[e.key] = true;
+      if (e.key === ' ') shoot();
+    });
+
+    window.addEventListener('keyup', e => {
+      keys[e.key] = false;
+    });
+
+    startBtn.addEventListener('click', startGame);
+  </script>
+</body>
+</html>
